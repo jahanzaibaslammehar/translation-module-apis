@@ -1,0 +1,679 @@
+openapi: 3.0.3
+info:
+  title: Translation API
+  description: |
+    A comprehensive API for managing multi-language translations with authentication support.
+    
+    ## Features
+    - User authentication with Laravel Sanctum
+    - Create, read, update, and search translations
+    - Support for multiple contexts and locales
+    - Paginated search results
+    - JSON-based translation storage
+    
+    ## Authentication
+    This API uses Bearer token authentication. After login, include the token in the Authorization header:
+    ```
+    Authorization: Bearer {your_token}
+    ```
+    
+    ## Translation Format
+    Translations are stored as key-value pairs where:
+    - Keys represent translation identifiers (e.g., 'welcome_message', 'button_submit')
+    - Values represent the actual translated text in the specified locale
+    
+    ## Rate Limiting
+    API requests are subject to rate limiting. Please implement appropriate retry logic with exponential backoff.
+    
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@translation-api.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.translation-service.com/v1
+    description: Production server
+  - url: https://staging-api.translation-service.com/v1
+    description: Staging server
+  - url: http://localhost:8000/api
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate a user and receive an access token
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              valid_credentials:
+                summary: Valid login credentials
+                value:
+                  email: "user@example.com"
+                  password: "password123"
+              invalid_email:
+                summary: Invalid email format
+                value:
+                  email: "invalid-email"
+                  password: "password123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserResponse'
+              examples:
+                successful_login:
+                  summary: Successful login response
+                  value:
+                    code: 200
+                    message: "User logged in successfully"
+                    data:
+                      id: 1
+                      name: "John Doe"
+                      email: "user@example.com"
+                      access_token: "1|abc123def456ghi789..."
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_credentials:
+                  summary: Invalid credentials
+                  value:
+                    code: 401
+                    message: "Invalid credentials"
+                    data: "Invalid credentials"
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              examples:
+                missing_email:
+                  summary: Missing email field
+                  value:
+                    code: 422
+                    message: "The email field is required."
+                    errors:
+                      email: ["The email field is required."]
+                invalid_email_format:
+                  summary: Invalid email format
+                  value:
+                    code: 422
+                    message: "The email must be a valid email address."
+                    errors:
+                      email: ["The email must be a valid email address."]
+
+  /translation/get/{context}/{locale}:
+    get:
+      tags:
+        - Translations
+      summary: Get translation by context and locale
+      description: Retrieve all translations for a specific context and locale combination
+      operationId: getTranslation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: context
+          in: path
+          required: true
+          description: The context identifier for the translations (e.g., 'common', 'auth', 'dashboard')
+          schema:
+            type: string
+            maxLength: 255
+            example: "common"
+        - name: locale
+          in: path
+          required: true
+          description: The locale/language code (e.g., 'en', 'es', 'fr', 'de')
+          schema:
+            type: string
+            maxLength: 255
+            example: "en"
+      responses:
+        '200':
+          description: Translation retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TranslationResponse'
+              examples:
+                common_translations:
+                  summary: Common translations in English
+                  value:
+                    code: 200
+                    message: "Translation retrieved successfully"
+                    data:
+                      id: 1
+                      context: "common"
+                      locale: "en"
+                      translations: '{"welcome": "Welcome", "hello": "Hello", "goodbye": "Goodbye"}'
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Translation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /translation/create:
+    post:
+      tags:
+        - Translations
+      summary: Create new translation
+      description: Create a new translation entry with the specified context, locale, and translation key-value pairs
+      operationId: createTranslation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTranslationRequest'
+            examples:
+              welcome_page:
+                summary: Welcome page translations
+                value:
+                  context: "welcome_page"
+                  locale: "es"
+                  translations:
+                    title: "Bienvenido a nuestra aplicación"
+                    subtitle: "Comience su viaje aquí"
+                    button_start: "Comenzar"
+              auth_messages:
+                summary: Authentication messages
+                value:
+                  context: "auth"
+                  locale: "fr"
+                  translations:
+                    login_success: "Connexion réussie"
+                    login_failed: "Échec de la connexion"
+                    logout_success: "Déconnexion réussie"
+      responses:
+        '200':
+          description: Translation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TranslationResponse'
+              examples:
+                created_translation:
+                  summary: Successfully created translation
+                  value:
+                    code: 200
+                    message: "Translation created successfully"
+                    data:
+                      id: 5
+                      context: "welcome_page"
+                      locale: "es"
+                      translations: '{"title": "Bienvenido a nuestra aplicación", "subtitle": "Comience su viaje aquí"}'
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              examples:
+                missing_context:
+                  summary: Missing context field
+                  value:
+                    code: 422
+                    message: "The context field is required."
+                    errors:
+                      context: ["The context field is required."]
+                invalid_translations:
+                  summary: Invalid translations format
+                  value:
+                    code: 422
+                    message: "The translations field is required."
+                    errors:
+                      translations: ["The translations field is required."]
+
+  /translation/update:
+    patch:
+      tags:
+        - Translations
+      summary: Update existing translation
+      description: Update an existing translation entry. Only the ID is required; other fields are optional and will only be updated if provided.
+      operationId: updateTranslation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTranslationRequest'
+            examples:
+              update_welcome:
+                summary: Update welcome message
+                value:
+                  id: 1
+                  translations:
+                    welcome: "Updated Welcome Message"
+                    hello: "Updated Hello Message"
+              update_context_locale:
+                summary: Update context and locale
+                value:
+                  id: 1
+                  context: "updated_context"
+                  locale: "fr"
+                  translations:
+                    welcome: "Bienvenue"
+      responses:
+        '200':
+          description: Translation updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TranslationResponse'
+              examples:
+                updated_translation:
+                  summary: Successfully updated translation
+                  value:
+                    code: 200
+                    message: "Translation updated successfully"
+                    data:
+                      id: 1
+                      context: "updated_context"
+                      locale: "fr"
+                      translations: '{"welcome": "Bienvenue", "hello": "Bonjour"}'
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              examples:
+                missing_id:
+                  summary: Missing ID field
+                  value:
+                    code: 422
+                    message: "The id field is required."
+                    errors:
+                      id: ["The id field is required."]
+                invalid_id:
+                  summary: Invalid ID format
+                  value:
+                    code: 422
+                    message: "The id must be an integer."
+                    errors:
+                      id: ["The id must be an integer."]
+                non_existent_id:
+                  summary: Non-existent translation ID
+                  value:
+                    code: 422
+                    message: "The selected id is invalid."
+                    errors:
+                      id: ["The selected id is invalid."]
+
+  /translation/search/{keyword}:
+    get:
+      tags:
+        - Translations
+      summary: Search translations
+      description: |
+        Search for translations by keyword. The search will look for matches in:
+        - Context names
+        - Locale codes
+        - Translation keys
+        - Translation values
+        
+        Results are paginated with a default page size of 100.
+      operationId: searchTranslations
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: keyword
+          in: path
+          required: true
+          description: The search keyword to find in contexts, locales, keys, or values
+          schema:
+            type: string
+            example: "welcome"
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PaginatedTranslationResponse'
+              examples:
+                search_results:
+                  summary: Search results with pagination
+                  value:
+                    code: 200
+                    message: "Search completed successfully"
+                    data:
+                      current_page: 1
+                      data:
+                        - id: 1
+                          context: "common"
+                          locale: "en"
+                          translations: '{"welcome": "Welcome", "hello": "Hello"}'
+                        - id: 2
+                          context: "welcome_page"
+                          locale: "en"
+                          translations: '{"title": "Welcome to our app"}'
+                      per_page: 100
+                      total: 2
+                      last_page: 1
+                      from: 1
+                      to: 2
+                empty_results:
+                  summary: No search results found
+                  value:
+                    code: 200
+                    message: "Search completed successfully"
+                    data:
+                      current_page: 1
+                      data: []
+                      per_page: 100
+                      total: 0
+                      last_page: 1
+                      from: null
+                      to: null
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Enter the token with the `Bearer ` prefix, e.g. "Bearer abc123...".
+        
+        You can obtain this token by calling the `/login` endpoint with valid credentials.
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: User's email address
+          example: "user@example.com"
+        password:
+          type: string
+          maxLength: 255
+          description: User's password
+          example: "password123"
+      additionalProperties: false
+
+    CreateTranslationRequest:
+      type: object
+      required:
+        - context
+        - locale
+        - translations
+      properties:
+        context:
+          type: string
+          maxLength: 255
+          description: The context identifier for grouping related translations
+          example: "common"
+        locale:
+          type: string
+          maxLength: 255
+          description: The locale/language code for the translations
+          example: "en"
+        translations:
+          type: object
+          description: Key-value pairs where keys are translation identifiers and values are the translated text
+          additionalProperties:
+            type: string
+            maxLength: 255
+          example:
+            welcome: "Welcome"
+            hello: "Hello"
+            goodbye: "Goodbye"
+      additionalProperties: false
+
+    UpdateTranslationRequest:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          description: The ID of the translation to update
+          example: 1
+        context:
+          type: string
+          maxLength: 255
+          description: The new context identifier (optional)
+          example: "updated_context"
+        locale:
+          type: string
+          maxLength: 255
+          description: The new locale code (optional)
+          example: "fr"
+        translations:
+          type: object
+          description: New key-value pairs for translations (optional)
+          additionalProperties:
+            type: string
+            maxLength: 255
+          example:
+            welcome: "Bienvenue"
+            hello: "Bonjour"
+      additionalProperties: false
+
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP status code
+          example: 200
+        message:
+          type: string
+          description: Success message
+          example: "Operation completed successfully"
+        data:
+          description: Response data (varies by endpoint)
+      required:
+        - code
+        - message
+        - data
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP status code
+          example: 401
+        message:
+          type: string
+          description: Error message
+          example: "Unauthorized access"
+        data:
+          description: Additional error information
+      required:
+        - code
+        - message
+
+    ValidationErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            errors:
+              type: object
+              description: Field-specific validation errors
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+              example:
+                email: ["The email field is required."]
+                password: ["The password field is required."]
+          required:
+            - errors
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: User's unique identifier
+          example: 1
+        name:
+          type: string
+          description: User's full name
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "user@example.com"
+        access_token:
+          type: string
+          description: JWT token for API authentication
+          example: "1|abc123def456ghi789..."
+      required:
+        - id
+        - name
+        - email
+        - access_token
+
+    TranslationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Translation's unique identifier
+          example: 1
+        context:
+          type: string
+          description: The context identifier
+          example: "common"
+        locale:
+          type: string
+          description: The locale/language code
+          example: "en"
+        translations:
+          type: string
+          description: JSON string containing key-value pairs of translations
+          example: '{"welcome": "Welcome", "hello": "Hello"}'
+      required:
+        - id
+        - context
+        - locale
+        - translations
+
+    PaginatedTranslationResponse:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          description: Current page number
+          example: 1
+        data:
+          type: array
+          description: Array of translation objects
+          items:
+            $ref: '#/components/schemas/TranslationResponse'
+        per_page:
+          type: integer
+          description: Number of items per page
+          example: 100
+        total:
+          type: integer
+          description: Total number of items
+          example: 150
+        last_page:
+          type: integer
+          description: Last page number
+          example: 2
+        from:
+          type: integer
+          nullable: true
+          description: First item number on current page
+          example: 1
+        to:
+          type: integer
+          nullable: true
+          description: Last item number on current page
+          example: 100
+      required:
+        - current_page
+        - data
+        - per_page
+        - total
+        - last_page
+        - from
+        - to
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization endpoints
+  - name: Translations
+    description: Translation management endpoints for creating, reading, updating, and searching translations
+
+externalDocs:
+  description: Find more info about Translation API
+  url: https://github.com/your-org/translation-api
